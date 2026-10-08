@@ -1,0 +1,74 @@
+# DNSGuard-X dashboard theme.
+# Two modes are defined, so the light/dark switch in the app's settings menu works:
+#   - Day:   orange on white
+#   - Night: cyan-green on black
+# Shared tokens (fonts, radius) live in [theme] and are inherited by both modes.
+
+[theme]
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+headingFont = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+baseFontSize = 15
+baseRadius = "8px"
+buttonRadius = "8px"
+showWidgetBorder = true
+showSidebarBorder = true
+linkUnderline = false
+headingFontSizes = ["30px", "23px", "19px", "16px", "14px", "13px"]
+headingFontWeights = [700, 600, 600, 600, 500, 500]
+
+# ----------------------------------------------------------------- Day: orange / white
+[theme.light]
+primaryColor = "#E8690B"             # warm orange; white button text stays readable
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FFF4EC" # soft warm tint for cards and widgets
+textColor = "#1C1A18"
+linkColor = "#C9560A"
+borderColor = "#F0D9C8"
+codeBackgroundColor = "#FFF4EC"
+codeTextColor = "#1C1A18"
+
+orangeColor = "#E8690B"
+redColor = "#C62828"
+greenColor = "#1A7F37"
+blueColor = "#1E6FD9"
+yellowColor = "#B8860B"
+violetColor = "#8250DF"
+grayColor = "#5B6470"
+
+chartCategoricalColors = ["#E8690B", "#1E6FD9", "#1A7F37", "#8250DF", "#C62828", "#B8860B", "#5B6470"]
+
+[theme.light.sidebar]
+backgroundColor = "#FFF7F0"
+secondaryBackgroundColor = "#FBE9DA"
+borderColor = "#F0D9C8"
+textColor = "#1C1A18"
+primaryColor = "#E8690B"
+
+# --------------------------------------------------------------- Night: cyan-green / black
+[theme.dark]
+primaryColor = "#0D9488"             # deep teal; white button text stays readable
+backgroundColor = "#0A0F0D"
+secondaryBackgroundColor = "#111A17"
+textColor = "#D7E4DF"
+linkColor = "#2DD4BF"
+borderColor = "#1E2B27"
+codeBackgroundColor = "#0E1613"
+codeTextColor = "#D7E4DF"
+
+orangeColor = "#FBBF24"
+redColor = "#FB7185"
+greenColor = "#34D399"
+blueColor = "#38BDF8"
+yellowColor = "#FACC15"
+violetColor = "#A78BFA"
+grayColor = "#94A3B8"
+
+chartCategoricalColors = ["#2DD4BF", "#38BDF8", "#4ADE80", "#A78BFA", "#FB7185", "#FBBF24", "#94A3B8"]
+
+[theme.dark.sidebar]
+backgroundColor = "#070B0A"
+secondaryBackgroundColor = "#111A17"
+borderColor = "#1E2B27"
+textColor = "#D7E4DF"
+primaryColor = "#2DD4BF"

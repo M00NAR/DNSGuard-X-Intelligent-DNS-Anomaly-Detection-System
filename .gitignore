@@ -1,0 +1,29 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# ---- DNSGuard-X runtime artifacts ----
+# SQLite logs (recreated by the CLI)
+*.db
+# Generated test captures (recreate: python tools/generate_traffic.py)
+data/pcaps/
+
+# ---- Node / frontend ----
+web/frontend/node_modules/
+web/frontend/*.local
+
+# NOTE: web/frontend/dist IS committed on purpose, so the web UI runs after
+# clone without needing `npm run build`.
+
+# ---- OS / editors ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,92 @@
+# DNSGuard-X configuration.
+# Every threshold used by the detection engine lives in this file.
+# Paths are resolved relative to this file's directory.
+
+capture:
+  # BPF filter used for live sniffing (UDP and TCP DNS).
+  bpf_filter: "udp port 53 or tcp port 53"
+  # Default interface for --live when --iface is not given (null = scapy default).
+  iface: null
+
+preprocessing:
+  # Use tldextract's bundled public-suffix snapshot (no network access needed).
+  offline_suffix_list: true
+
+whitelist:
+  enabled: true
+  # One domain per line, or Tranco-style "rank,domain" CSV.
+  path: data/whitelist.txt
+
+matching:
+  # How long (seconds) a query waits for its response before it is forgotten.
+  query_timeout_seconds: 10
+  # How long an answered query is remembered to spot a second, conflicting response.
+  answered_memory_seconds: 10
+  # Responses without a query are ignored this many seconds after capture start
+  # (a capture can start in the middle of an exchange).
+  unmatched_grace_seconds: 2
+
+host_window:
+  # Sliding window (seconds) for per-host features.
+  seconds: 60
+  # QPS = queries_in_window / max(window_span, min_span_seconds)
+  min_span_seconds: 1.0
+
+detectors:
+  D1:
+    enabled: true
+    attack_type: "DNS Tunneling (payload)"
+    severity: High
+    entropy_threshold: 3.8      # entropy > this
+    min_name_length: 50         # AND name length > this
+    dedupe_by: domain
+  D2:
+    enabled: true
+    attack_type: "DNS Tunneling (volume)"
+    severity: High
+    unique_subdomains_threshold: 30   # > this many unique subdomains of one parent per window
+    dedupe_by: domain
+  D3:
+    enabled: true
+    attack_type: "DGA / C2 / Water Torture"
+    severity: Medium
+    nxdomain_ratio_threshold: 0.5     # NXDOMAIN ratio > this
+    min_responses: 20                 # with at least this many responses in the window
+    # Host-level behaviour: one alert per host per window instead of one per random domain.
+    dedupe_by: host
+  D4:
+    enabled: true
+    flood_attack_type: "DNS Flood"
+    amplification_attack_type: "DNS Amplification"
+    severity: High
+    qps_threshold: 100                # queries per second > this
+    amplification_qtypes: [ANY]
+    size_ratio_threshold: 10          # response/request size ratio > this
+    dedupe_by: domain
+  D5:
+    enabled: true
+    attack_type: "Suspected DGA Domain"
+    severity: Low
+    entropy_threshold: 3.5            # entropy > this
+    max_vowel_ratio: 0.2              # AND (vowel ratio < this
+    min_consonant_run: 5              #      OR longest consonant run >= this)
+    dedupe_by: domain
+  CP:
+    enabled: true
+    attack_type: "Cache Poisoning Indicator"
+    severity: Medium
+    flag_conflicting_answers: true    # two responses, same dns_id, different answers
+    flag_unmatched_responses: true    # response with no matching query
+    dedupe_by: domain
+
+alerts:
+  # One alert per (src_ip, parent domain, attack type) per this many seconds.
+  dedupe_window_seconds: 60
+
+storage:
+  enabled: true
+  db_path: dnsguard.db
+  # Store one row per query (used by the dashboard's entropy histogram).
+  log_queries: true
+  # Live mode: write buffered alerts/queries to SQLite this often (seconds).
+  flush_interval_seconds: 2
