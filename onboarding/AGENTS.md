@@ -54,6 +54,89 @@ dnsguard-x/
 See `dnsguard/engine.py:DetectionEngine.process_record` — it is the single place the
 whole pipeline is wired together.
 
+## Detailed workflow (stage by stage)
+
+Every packet — from a live interface or a `.pcap` — passes through the same eight stages.
+The numbers in brackets are the default thresholds from `config.yaml`.
+
+### Stage 0 — Input (`dnsguard/capture.py`)
+- **Offline:** `read_pcap()` streams packets from a file in capture order (repeatable;
+  used by tests and demos).
+- **Live:** `sniff_live()` sniffs an interface with BPF filter
+  `udp port 53 or tcp port 53`. Requires admin/root (and Npcap on Windows); a
+  missing-privilege error is turned into a clear `CaptureError`, not a traceback.
+- Both feed raw scapy packets into `DetectionEngine.process_record`, one at a time.
+
+### Stage 1 — Parse (`dnsguard/parser.py:parse_packet`)
+Each packet becomes a normalised `DNSRecord`:
+`timestamp, src_ip, dst_ip, query_name, qtype, is_response, rcode, dns_id,
+packet_size, answers[], ttl, transport`. Non-DNS packets return `None` and are dropped.
+Numeric qtype/rcode values are mapped to names. `DNSRecord.host_pair` is the sorted
+`(src, dst)` tuple, used later to match a response to its request regardless of direction.
+
+### Stage 2 — Preprocess (`dnsguard/features.py`)
+- Lowercase the name and strip the trailing dot.
+- `parent_domain()` uses **tldextract** (offline public-suffix snapshot — never hits the
+  network) to extract the registered domain, so `a1.x.evil.com` and `b2.x.evil.com` both
+  group under `evil.com`.
+- `subdomain_part()` isolates the labels left of the parent, where encoded data and
+  random strings live.
+
+### Stage 3 — Whitelist (`dnsguard/whitelist.py`)
+If the parent domain is in `data/whitelist.txt` (~400 popular domains), the lookup is
+marked benign and **skipped** — but still handed to the response matcher so later
+matching stays correct. This drops most benign traffic early.
+
+### Stage 4 — Feature extraction (`dnsguard/features.py`)
+**Per query:** name length, longest label length, Shannon entropy of the subdomain
+(`H = -sum p_i log2 p_i`), digit ratio, vowel ratio, longest consonant run, number of
+labels, qtype, and response/request size ratio.
+**Per host, sliding 60 s window** (`HostWindow`, a deque keyed by `src_ip` that evicts
+entries older than the window): queries per second, unique subdomains per parent domain
+(keeps the worst parent), NXDOMAIN ratio, and TXT/NULL share.
+**Response matching** (`ResponseMatcher`): each query is keyed by `(dns_id, host_pair)`;
+when a response arrives it yields the size ratio and any cache-poisoning signals.
+
+### Stage 5 — Detection (`dnsguard/detectors.py`, `engine.py`)
+All detectors run independently, so one lookup can raise several alerts.
+
+| Detector | Fires when | Severity |
+|----------|------------|----------|
+| D1 Tunneling (payload) | `entropy > 3.8` AND `name_length > 50` | High |
+| D2 Tunneling (volume) | `unique_subdomains(parent) > 30` in the window | High |
+| D3 DGA / C2 / water torture | `responses >= 20` AND `nxdomain_ratio > 0.5` (per host) | Medium |
+| D4 Flood / Amplification | `QPS > 100` OR (`qtype == ANY` AND `size_ratio > 10`) | High |
+| D5 Suspected DGA name | `entropy > 3.5` AND (`vowel_ratio < 0.2` OR `consonant_run >= 5`) | Low |
+| CP Cache-poisoning | two responses, same `dns_id`, different answers; or a response with no matching query | Medium |
+
+Each hit becomes a `Finding(detector_id, attack_type, severity, src_ip, domain, reason,
+timestamp)` whose `reason` carries the real values (e.g. `entropy 4.57 > 3.8, name
+length 87 > 50, qtype TXT`). CP is **not** a `Detector` subclass — it runs on responses
+in `engine._handle_poisoning()` from the matcher's signals.
+
+### Stage 6 — Alert management (`dnsguard/alerts.py:AlertManager`)
+Findings are de-duplicated by key `(src_ip, parent_domain, attack_type)` within a 60 s
+window: the first hit creates an `Alert`; repeats increment a **hit count** and refresh
+the window; the highest severity and its reason are kept. A flood that matches a rule
+2,000 times becomes one alert that says "x2000".
+
+### Stage 7 — Storage (`dnsguard/storage.py`, SQLite)
+Three tables: `runs` (one per CLI run, with source and totals), `alerts` (upserted as
+hit counts grow; unique on run + src + domain + type), and `queries` (one row per
+inspected lookup, feeding the dashboard's entropy histogram). Live mode flushes
+periodically (`storage.flush_interval_seconds`).
+
+### Stage 8 — Output
+- **CLI** (`dnsguard/main.py`): prints each new alert as it fires, then a coloured
+  summary (alerts per type, top 5 hosts, severity breakdown).
+- **Dashboards:** Streamlit (`dashboard/app.py`) or the React web UI
+  (`web/server.py` -> http://localhost:8000): metrics, charts, top hosts, entropy
+  histogram, and a filterable alert table with reasons.
+
+**Responses vs queries:** in `process_record`, a *response* updates the host window and
+the matcher (and may raise D4-amplification or CP); a *query* is whitelisted-checked,
+featurised, and run through D1/D2/D3/D5 before alerts are raised.
+
 ## Environment & setup
 
 - **Python 3.10+** (developed and run on 3.14). Core deps: scapy, pandas, numpy,

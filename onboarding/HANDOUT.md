@@ -77,7 +77,54 @@ precision/recall with no false alarms on normal traffic.
 A single DNS lookup flows through: **capture → parse → extract parent domain →
 whitelist → features → detectors → alert manager → storage → dashboard.**
 
-## 5. Good first tasks
+## 5. Detailed workflow — follow one lookup end to end
+
+This is the whole system in plain language. The bracketed numbers are the default
+settings in `config.yaml` (change them there, not in code).
+
+1. **Capture.** A DNS packet arrives — either read from a `.pcap` file or sniffed live
+   from a network card (`dnsguard/capture.py`). Live sniffing needs admin rights.
+2. **Parse.** The packet is decoded into a tidy record: who asked, the name queried, the
+   record type (A, TXT, ANY…), whether the answer succeeded, the sizes, and the time
+   (`dnsguard/parser.py`). Anything that isn't DNS is thrown away.
+3. **Find the parent domain.** The name is lower-cased and its registered domain is
+   pulled out, so `a.evil.com` and `b.evil.com` both count as `evil.com`
+   (`dnsguard/features.py`).
+4. **Whitelist check.** If that domain is a known-safe site (one of ~400 in
+   `data/whitelist.txt`), the lookup is skipped. This removes most ordinary traffic so we
+   only study the suspicious remainder.
+5. **Measure the clues (features).** For the lookup itself: how long the name is, how
+   *random* it looks (**Shannon entropy** — low for real words, high for scrambled/encoded
+   strings), how many digits/vowels, the record type, and how much bigger the answer is
+   than the question. For the *computer* over the last **60 seconds**: how many lookups
+   per second, how many different made-up names it tried under one domain, and what share
+   of answers came back "does not exist" (NXDOMAIN).
+6. **Run the detectors.** Five independent rules check those clues; a lookup can trip more
+   than one:
+   - **D1 Tunneling (payload)** — name is long (>50 chars) *and* scrambled (entropy >3.8).
+   - **D2 Tunneling (volume)** — >30 different made-up names under one domain in 60 s.
+   - **D3 DGA / water torture** — over half of a host's last (≥20) answers were "does not
+     exist".
+   - **D4 Flood / Amplification** — >100 lookups/second, *or* an "ANY" query whose answer
+     is >10× the request.
+   - **D5 Suspected DGA name** — scrambled (entropy >3.5) with an unnatural letter pattern
+     (few vowels or 5+ consonants in a row).
+   - **CP Cache poisoning** — two different answers for the same question, or an answer
+     nobody asked for.
+7. **Raise and group alerts.** Each rule hit becomes an alert with a type, severity, the
+   offending host, and a plain-English reason containing the real numbers (e.g. *"entropy
+   4.57 > 3.8, name length 87, type TXT"*). Repeats for the same host + domain + type are
+   merged into one alert with a **hit count**, so a flood of 2,000 shows as one line that
+   says "×2000" (`dnsguard/alerts.py`).
+8. **Store and show.** Alerts and per-lookup stats are written to a SQLite database
+   (`dnsguard/storage.py`) and shown in the CLI summary, the Streamlit dashboard, or the
+   React web UI.
+
+The one place all of this is wired together is
+`dnsguard/engine.py` → `DetectionEngine.process_record()`. If you only read one function
+to understand the project, read that one.
+
+## 6. Good first tasks
 
 - **Easy:** add a domain to `data/whitelist.txt`; add a new benign/attack scenario to the
   traffic generator; improve wording of an alert reason.
@@ -90,7 +137,7 @@ whitelist → features → detectors → alert manager → storage → dashboard
 **Always** add or update a test in `tests/` when you change detection behaviour, and keep
 thresholds in `config.yaml`.
 
-## 6. Workflow & house rules
+## 7. Workflow & house rules
 
 - Branch, commit with a clear message, open a pull request. Keep commits focused.
 - Run `python -m pytest` before pushing — all tests should pass.
@@ -98,7 +145,7 @@ thresholds in `config.yaml`.
 - Run the CLI as a module: `python -m dnsguard.main …` (not `python dnsguard/main.py`).
 - Generated files (`data/pcaps/`, `*.db`) are gitignored — don't commit them.
 
-## 7. Where to get help
+## 8. Where to get help
 
 - Code structure and conventions: [AGENTS.md](AGENTS.md).
 - The design report and diagrams: [`../docs/`](../docs/).
