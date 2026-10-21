@@ -42,7 +42,7 @@ dnsguard-x/
   data/
     whitelist.txt        ~400 popular parent domains (committed).
     pcaps/               Generated captures + labels.csv (gitignored; recreate on demand).
-  docs/                  Project report (dnsguard_x.tex / .pdf) and explainers.
+  docs/                  Project report (dnsguard_x.pdf) and status/validation notes.
   onboarding/            This folder: AGENTS.md + HANDOUT.md.
 ```
 
@@ -122,8 +122,8 @@ the window; the highest severity and its reason are kept. A flood that matches a
 
 ### Stage 7 — Storage (`dnsguard/storage.py`, SQLite)
 Three tables: `runs` (one per CLI run, with source and totals), `alerts` (upserted as
-hit counts grow; unique on run + src + domain + type), and `queries` (one row per
-inspected lookup, feeding the dashboard's entropy histogram). Live mode flushes
+hit counts grow; unique on run + src + domain + type + window start timestamp), and
+`queries` (one row per inspected lookup, feeding the dashboard's entropy histogram). Live mode flushes
 periodically (`storage.flush_interval_seconds`).
 
 ### Stage 8 — Output

@@ -2,7 +2,7 @@
 
 Welcome! This is a one-page guide to get a new team member productive on DNSGuard-X.
 For the deeper "how the code is organised" reference, read [AGENTS.md](AGENTS.md) next to
-this file. For the full project write-up, see [`../docs/dnsguard_x.pdf`](../docs/).
+this file. For the full project write-up, see [the project report](../docs/dnsguard_x.pdf).
 
 ---
 
@@ -142,13 +142,14 @@ thresholds in `config.yaml`.
 - Branch, commit with a clear message, open a pull request. Keep commits focused.
 - Run `python -m pytest` before pushing — all tests should pass.
 - Never hardcode a detection threshold in Python; read it from `config.yaml`.
-- Run the CLI as a module: `python -m dnsguard.main …` (not `python dnsguard/main.py`).
+- Run the CLI as a module: `python -m dnsguard.main --pcap data/pcaps/mixed.pcap`
+  (not `python dnsguard/main.py`).
 - Generated files (`data/pcaps/`, `*.db`) are gitignored — don't commit them.
 
 ## 8. Where to get help
 
 - Code structure and conventions: [AGENTS.md](AGENTS.md).
-- The design report and diagrams: [`../docs/`](../docs/).
+- The design report and workflow: [dnsguard_x.pdf](../docs/dnsguard_x.pdf).
 - Still stuck? Open an issue describing what you ran and what you saw.
 
 Happy hacking!

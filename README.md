@@ -7,6 +7,9 @@ with the actual values.
 
 It detects the common ways DNS gets abused:
 
+For the end-to-end architecture and workflow, see the [project report](docs/dnsguard_x.pdf).
+The [status and validation note](docs/PROJECT_STATUS.md) records what has and has not been verified in this checkout.
+
 | Attack | Signals | Detector | Severity |
 | --- | --- | --- | --- |
 | DNS tunneling (payload) | high entropy + long names | D1 | High |
