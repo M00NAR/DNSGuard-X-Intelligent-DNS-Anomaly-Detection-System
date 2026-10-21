@@ -47,11 +47,13 @@ class RunCollector:
     def __init__(self, storage: Storage | None, log_queries: bool) -> None:
         self.storage = storage
         self.log_queries = log_queries
-        self.alerts: dict[tuple[str, str, str], Alert] = {}
+        # Include the window's first timestamp: the same host/domain/type can
+        # create another distinct alert after the de-duplication window expires.
+        self.alerts: dict[tuple[str, str, str, float], Alert] = {}
         self.new_alert_lines: list[str] = []
 
     def on_alert(self, alert: Alert, is_new: bool) -> None:
-        self.alerts[alert.key()] = alert
+        self.alerts[(*alert.key(), alert.timestamp)] = alert
         if self.storage:
             self.storage.upsert_alert(alert)
         if is_new:

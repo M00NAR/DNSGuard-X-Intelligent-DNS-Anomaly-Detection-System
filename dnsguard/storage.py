@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     detector_id TEXT,
     reason      TEXT,
     hit_count   INTEGER,
-    UNIQUE(run_id, src_ip, domain, attack_type)
+    UNIQUE(run_id, src_ip, domain, attack_type, timestamp)
 );
 CREATE TABLE IF NOT EXISTS queries (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,8 +68,37 @@ class Storage:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(self.db_path)
         self._conn.executescript(_SCHEMA)
+        self._upgrade_alerts_schema()
         self._conn.commit()
         self.run_id: int | None = None
+
+    def _upgrade_alerts_schema(self) -> None:
+        """Preserve older databases while allowing a new alert for each window."""
+        legacy_key = ["run_id", "src_ip", "domain", "attack_type"]
+        indexes = self._conn.execute("PRAGMA index_list('alerts')").fetchall()
+        for index in indexes:
+            if not index[2]:  # only UNIQUE indexes
+                continue
+            columns = [row[2] for row in self._conn.execute(
+                f'PRAGMA index_info("{index[1]}")').fetchall()]
+            if columns != legacy_key:
+                continue
+            fields = ("id, run_id, timestamp, last_timestamp, src_ip, domain, "
+                      "attack_type, severity, detector_id, reason, hit_count")
+            with self._conn:
+                self._conn.execute("ALTER TABLE alerts RENAME TO alerts_legacy")
+                self._conn.execute("""CREATE TABLE alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id INTEGER, timestamp REAL, last_timestamp REAL,
+                    src_ip TEXT, domain TEXT, attack_type TEXT, severity TEXT,
+                    detector_id TEXT, reason TEXT, hit_count INTEGER,
+                    UNIQUE(run_id, src_ip, domain, attack_type, timestamp)
+                )""")
+                self._conn.execute(
+                    f"INSERT INTO alerts ({fields}) SELECT {fields} FROM alerts_legacy")
+                self._conn.execute("DROP TABLE alerts_legacy")
+                self._conn.execute("CREATE INDEX idx_alerts_run ON alerts(run_id)")
+            break
 
     def __enter__(self) -> "Storage":
         return self
@@ -109,7 +138,7 @@ class Storage:
             "INSERT INTO alerts(run_id, timestamp, last_timestamp, src_ip, domain, "
             "attack_type, severity, detector_id, reason, hit_count) "
             "VALUES (?,?,?,?,?,?,?,?,?,?) "
-            "ON CONFLICT(run_id, src_ip, domain, attack_type) DO UPDATE SET "
+            "ON CONFLICT(run_id, src_ip, domain, attack_type, timestamp) DO UPDATE SET "
             "last_timestamp=excluded.last_timestamp, severity=excluded.severity, "
             "detector_id=excluded.detector_id, reason=excluded.reason, "
             "hit_count=excluded.hit_count",
